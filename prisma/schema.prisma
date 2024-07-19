@@ -13,22 +13,14 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-model Subscription {
-  id        String   @id @default(uuid())
-  userId    String
-  teamId    String
-  leagueId  String
-  active    Boolean  @default(true)
-  createdAt DateTime @default(now())
-}
-
 model Notification {
-  id        String   @id @default(uuid())
-  userId    String
-  teamId    String
-  leagueId  String
-  eventType String
-  message   String
-  createdAt DateTime @default(now())
-  sent      Boolean  @default(false)
+  id             String   @id @default(uuid())
+  subscriptionId String
+  userId         String
+  teamId         String
+  leagueId       String
+  eventType      String
+  message        String
+  createdAt      DateTime @default(now())
+  sent           Boolean  @default(false)
 }

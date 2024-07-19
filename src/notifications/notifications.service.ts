@@ -1,8 +1,15 @@
-import { Inject, Injectable, Logger, OnModuleInit } from '@nestjs/common';
+import {
+  HttpStatus,
+  Inject,
+  Injectable,
+  Logger,
+  OnModuleInit,
+} from '@nestjs/common';
 import { PrismaClient } from '@prisma/client';
-import { ClientProxy } from '@nestjs/microservices';
+import { ClientProxy, RpcException } from '@nestjs/microservices';
 import { NATS_SERVICE } from 'src/config';
-import { CreateNotificationDto, CreateSubscriptionDto } from './dto';
+import { CreateNotificationDto } from './dto';
+import { firstValueFrom, lastValueFrom } from 'rxjs';
 
 @Injectable()
 export class NotificationsService extends PrismaClient implements OnModuleInit {
@@ -17,38 +24,20 @@ export class NotificationsService extends PrismaClient implements OnModuleInit {
     this.logger.log('Database connected');
   }
 
-  async createSubscription(createSubscriptionDto: CreateSubscriptionDto) {
-    this.logger.log('creating new subscription', createSubscriptionDto);
-
-    const { userId, teamId, leagueId } = createSubscriptionDto;
-
-    await this.subscription.create({
-      data: {
-        userId,
-        teamId,
-        leagueId,
-        active: true,
-      },
-    });
-  }
-
   async createNotification(createNotificationDto: CreateNotificationDto) {
     this.logger.log('Creating new notification', createNotificationDto);
 
     const { teamId, leagueId, eventType, message } = createNotificationDto;
 
-    const subscriptions = await this.subscription.findMany({
-      where: {
-        teamId,
-        leagueId,
-        active: true,
-      },
-    });
+    const subscriptions = await lastValueFrom(
+      this.client.send('user.get.subscriptions', { teamId, leagueId }),
+    );
 
     for (const subscription of subscriptions) {
       await this.notification.create({
         data: {
           userId: subscription.userId,
+          subscriptionId: subscription.id,
           teamId,
           leagueId,
           eventType,
@@ -56,5 +45,38 @@ export class NotificationsService extends PrismaClient implements OnModuleInit {
         },
       });
     }
+  }
+
+  async getUserNotifications(userId: string) {
+    try {
+      const userExists = await this.checkUserExists(userId);
+
+      if (!userExists) {
+        throw new RpcException({
+          status: HttpStatus.NOT_FOUND,
+          message: 'User not found',
+        });
+      }
+
+      return this.notification.findMany({
+        where: {
+          userId,
+        },
+      });
+    } catch ({ error }) {
+      throw new RpcException({
+        status: error.status || HttpStatus.BAD_REQUEST,
+        message:
+          error.message ||
+          'An error occurred while fetching user notifications',
+      });
+    }
+  }
+
+  private async checkUserExists(userId: string): Promise<boolean> {
+    const result = await firstValueFrom(
+      this.client.send('user.exists', { userId }),
+    );
+    return result.exists;
   }
 }
