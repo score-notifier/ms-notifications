@@ -25,24 +25,81 @@ export class NotificationsService extends PrismaClient implements OnModuleInit {
   }
 
   async createNotification(createNotificationDto: CreateNotificationDto) {
-    this.logger.log('Creating new notification', createNotificationDto);
+    try {
+      this.logger.log('Creating new notification', createNotificationDto);
 
-    const { teamId, leagueId, eventType, message } = createNotificationDto;
+      const {
+        homeTeamLiveScoreURL,
+        awayTeamLiveScoreURL,
+        matchLiveScoreURL,
+        leagueLiveScoreURL,
+        event,
+      } = createNotificationDto;
 
-    const subscriptions = await lastValueFrom(
-      this.client.send('user.get.subscriptions', { teamId, leagueId }),
-    );
+      const [league, homeTeam, awayTeam] = await Promise.all([
+        lastValueFrom(
+          this.client.send('competitions.league.url', {
+            scoreLiveURL: leagueLiveScoreURL,
+          }),
+        ),
+        lastValueFrom(
+          this.client.send('competitions.team.url', {
+            scoreLiveURL: homeTeamLiveScoreURL,
+          }),
+        ),
+        lastValueFrom(
+          this.client.send('competitions.team.url', {
+            scoreLiveURL: awayTeamLiveScoreURL,
+          }),
+        ),
+      ]);
 
-    for (const subscription of subscriptions) {
-      await this.notification.create({
-        data: {
-          userId: subscription.userId,
-          subscriptionId: subscription.id,
-          teamId,
-          leagueId,
-          eventType,
-          message,
-        },
+      this.logger.log('league, homeTeam, awayTeam', league, homeTeam, awayTeam);
+
+      const subscriptions = await Promise.all([
+        lastValueFrom(
+          this.client.send('user.get.subscriptions', {
+            teamId: homeTeam.id,
+            leagueId: league.id,
+          }),
+        ),
+        lastValueFrom(
+          this.client.send('user.get.subscriptions', {
+            teamId: awayTeam.id,
+            leagueId: league.id,
+          }),
+        ),
+      ]);
+
+      this.logger.debug('subscriptions', subscriptions.flat());
+
+      const message =
+        `${event.minute} ${event.eventType}` +
+        (event.homePlayer ? `: ${homeTeam.name} - ${event.homePlayer}` : '') +
+        (event.awayPlayer ? `: ${awayTeam.name} - ${event.awayPlayer}` : '');
+
+      for (const subscription of subscriptions.flat()) {
+        await this.notification.create({
+          data: {
+            matchLiveScoreURL,
+            userId: subscription.userId,
+            subscriptionId: subscription.id,
+            teamId: subscription.teamId,
+            leagueId: subscription.id,
+            eventType: event.eventType,
+            message,
+          },
+        });
+      }
+
+      this.logger.log('Notifications created successfully');
+    } catch (error) {
+      this.logger.error('Error creating notification', error);
+      throw new RpcException({
+        status: HttpStatus.BAD_REQUEST,
+        message:
+          error.message ||
+          'An error occurred while fetching user notifications',
       });
     }
   }
@@ -64,6 +121,7 @@ export class NotificationsService extends PrismaClient implements OnModuleInit {
         },
       });
     } catch ({ error }) {
+      this.logger.error('Error fetching user notifications', error);
       throw new RpcException({
         status: error.status || HttpStatus.BAD_REQUEST,
         message:

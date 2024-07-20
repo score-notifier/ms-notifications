@@ -14,13 +14,14 @@ datasource db {
 }
 
 model Notification {
-  id             String   @id @default(uuid())
-  subscriptionId String
-  userId         String
-  teamId         String
-  leagueId       String
-  eventType      String
-  message        String
-  createdAt      DateTime @default(now())
-  sent           Boolean  @default(false)
+  id                String   @id @default(uuid())
+  subscriptionId    String
+  userId            String
+  teamId            String
+  leagueId          String
+  eventType         String
+  message           String
+  matchLiveScoreURL String
+  createdAt         DateTime @default(now())
+  sent              Boolean  @default(false) // Push notification state
 }
