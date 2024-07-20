@@ -54,17 +54,28 @@ export class NotificationsService extends PrismaClient implements OnModuleInit {
         ),
       ]);
 
+      if (!league || !homeTeam || !awayTeam) {
+        this.logger.error('League, home team or away team not found', {
+          league,
+          homeTeam,
+          awayTeam,
+        });
+        throw new RpcException({
+          message: 'League, home team or away team not found',
+        });
+      }
+
       this.logger.log('league, homeTeam, awayTeam', league, homeTeam, awayTeam);
 
       const subscriptions = await Promise.all([
         lastValueFrom(
-          this.client.send('user.get.subscriptions', {
+          this.client.send('user.get.subscriptions.all', {
             teamId: homeTeam.id,
             leagueId: league.id,
           }),
         ),
         lastValueFrom(
-          this.client.send('user.get.subscriptions', {
+          this.client.send('user.get.subscriptions.all', {
             teamId: awayTeam.id,
             leagueId: league.id,
           }),
