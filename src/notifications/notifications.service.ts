@@ -103,7 +103,10 @@ export class NotificationsService extends PrismaClient implements OnModuleInit {
         });
       }
 
-      this.logger.log('Notifications created successfully');
+      this.logger.log(
+        'Notifications created successfully',
+        createNotificationDto,
+      );
     } catch (error) {
       this.logger.error('Error creating notification', error);
       throw new RpcException({
@@ -143,9 +146,8 @@ export class NotificationsService extends PrismaClient implements OnModuleInit {
   }
 
   private async checkUserExists(userId: string): Promise<boolean> {
-    const result = await firstValueFrom(
-      this.client.send('user.exists', { userId }),
+    return await firstValueFrom(
+      this.client.send<boolean>('user.exists', { userId }),
     );
-    return result.exists;
   }
 }
